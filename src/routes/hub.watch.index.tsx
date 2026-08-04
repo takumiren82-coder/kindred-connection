@@ -498,14 +498,13 @@ function SelectVideo({ onBack, onPicked }: { onBack: () => void; onPicked: (v: W
     setLoading(true);
     const r = await meta({ data: { id } });
     setLoading(false);
-    setSelected(
-      r.video ?? {
-        id,
-        title: "YouTube video",
-        channel: "",
-        thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
-      },
-    );
+    if (!r.video) {
+      setErr(r.error ?? "This video cannot be played inside a watch room.");
+      setSelected(null);
+      return;
+    }
+    setErr("");
+    setSelected(r.video);
   };
 
   return (
