@@ -121,8 +121,14 @@ function WatchRoom() {
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const voice = useVoiceMesh(code, myId, settings.voiceChat);
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
+
+  // in-room video picker (host)
+  const [videoSheet, setVideoSheet] = useState(false);
 
   const link = typeof window !== "undefined" ? `${window.location.origin}/hub/watch/${code}` : "";
+
 
   const send = useCallback(
     (event: string, payload: Record<string, unknown>) => {
