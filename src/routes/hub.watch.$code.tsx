@@ -985,3 +985,115 @@ function Sheet({
     </div>
   );
 }
+
+function VideoPicker({ onPick }: { onPick: (v: WatchVideo) => void }) {
+  const search = useServerFn(searchYouTube);
+  const meta = useServerFn(youtubeMeta);
+  const [q, setQ] = useState("");
+  const [link, setLink] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [results, setResults] = useState<WatchVideo[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const run = useCallback(
+    async (query: string) => {
+      if (!query.trim()) return;
+      setLoading(true);
+      setErr("");
+      const res = await search({ data: { q: query.trim() } });
+      setLoading(false);
+      if (res.error) setErr(res.error);
+      setResults(res.videos);
+    },
+    [search],
+  );
+
+  useEffect(() => {
+    void run("trending movies trailer");
+  }, [run]);
+
+  const useLink = async () => {
+    const id = parseYouTubeId(link);
+    if (!id) {
+      setErr("That doesn't look like a YouTube link.");
+      return;
+    }
+    setLoading(true);
+    const r = await meta({ data: { id } });
+    setLoading(false);
+    onPick(
+      r.video ?? {
+        id,
+        title: "YouTube video",
+        channel: "",
+        thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+      },
+    );
+  };
+
+  return (
+    <div className="max-h-[70vh] overflow-y-auto px-4 pb-4 pt-3">
+      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0d0708] px-3 py-2.5">
+        <Search className="h-4 w-4 text-neutral-500" />
+        <input
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            if (timer.current) clearTimeout(timer.current);
+            timer.current = setTimeout(() => void run(e.target.value), 350);
+          }}
+          placeholder="Search YouTube"
+          className="flex-1 bg-transparent text-[14.5px] outline-none placeholder:text-neutral-600"
+        />
+        {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/10 bg-[#0d0708] p-2">
+        <input
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="Paste YouTube link"
+          className="flex-1 bg-transparent px-2 py-1.5 text-[14px] outline-none placeholder:text-neutral-600"
+        />
+        <button
+          onClick={() => void useLink()}
+          className="rounded-lg bg-primary/15 px-3 py-1.5 text-[13px] font-semibold text-primary"
+        >
+          Play
+        </button>
+      </div>
+
+      {err && <p className="mt-2 text-[12px] text-primary">{err}</p>}
+
+      <div className="mt-4 space-y-2.5">
+        {results.map((v) => (
+          <button
+            key={v.id}
+            onClick={() => onPick(v)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-[#0d0708]/80 p-2.5 text-left active:border-primary"
+          >
+            <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-neutral-900">
+              <img src={v.thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
+              {v.duration && (
+                <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 text-[9.5px] font-medium">
+                  {v.duration}
+                </span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-2 text-[13.5px] font-medium leading-snug">{v.title}</p>
+              <p className="mt-0.5 truncate text-[11px] text-neutral-500">
+                {v.channel}
+                {v.views ? ` · ${v.views}` : ""}
+              </p>
+            </div>
+          </button>
+        ))}
+        {!loading && results.length === 0 && (
+          <p className="py-6 text-center text-[13px] text-neutral-600">No results yet.</p>
+        )}
+      </div>
+    </div>
+  );
+}
