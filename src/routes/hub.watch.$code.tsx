@@ -807,6 +807,14 @@ function WatchRoom() {
         </>
       )}
 
+      {/* video picker (host / anyone allowed to control) */}
+      {videoSheet && (
+        <Sheet title="Play a Video" onClose={() => setVideoSheet(false)}>
+          <VideoPicker onPick={pickVideo} />
+        </Sheet>
+      )}
+
+
       {/* invite sheet */}
       {invite && (
         <Sheet title="Invite to Room" onClose={() => setInvite(false)}>
