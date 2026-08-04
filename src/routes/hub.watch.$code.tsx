@@ -458,9 +458,20 @@ function WatchRoom() {
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-neutral-500">
               <MonitorPlay className="h-10 w-10" />
-              <p className="text-[13px]">Waiting for the host to pick a video…</p>
+              <p className="text-[13px]">
+                {canControl ? "No video yet — pick one to start." : "Waiting for the host to pick a video…"}
+              </p>
+              {canControl && (
+                <button
+                  onClick={() => setVideoSheet(true)}
+                  className="relative z-20 rounded-full bg-primary px-5 py-2 text-[13.5px] font-semibold text-white"
+                >
+                  Choose a video
+                </button>
+              )}
             </div>
           )}
+
 
           {/* transparent shield: taps go to our own controls, not YouTube's */}
           <div className="absolute inset-0" onClick={togglePlay} />
