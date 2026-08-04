@@ -4,6 +4,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@theme {
+  --font-heading: "Sora", sans-serif;
+  --font-body: "Manrope", sans-serif;
+}
+
+@utility font-heading {
+  font-family: "Sora", sans-serif;
+  letter-spacing: 0;
+}
+@utility font-body {
+  font-family: "Manrope", sans-serif;
+}
+
 /*
  * Design system definition.
  *
@@ -59,42 +72,53 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-gold: var(--gold);
+  --color-gold-bright: var(--gold-bright);
+  --color-gold-dim: var(--gold-dim);
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --radius: 1rem;
+  /* EmberChat reference palette: ember red on near-black */
+  --gold: #ff2e3f;
+  --gold-bright: #ff5b5b;
+  --gold-dim: #a3121c;
+  --background: #07070a;
+  --foreground: #f2f2f4;
+  --card: #101013;
+  --card-foreground: #f2f2f4;
+  --popover: #101013;
+  --popover-foreground: #f2f2f4;
+  --primary: #ff2e3f;
+  --primary-foreground: #ffffff;
+  --secondary: #17171b;
+  --secondary-foreground: #f2f2f4;
+  --muted: #131317;
+  --muted-foreground: #8b8b95;
+  --accent: #ff2e3f;
+  --accent-foreground: #ffffff;
+  --destructive: #ff2e3f;
+  --destructive-foreground: #ffffff;
+  --border: color-mix(in oklab, #ff2e3f 22%, transparent);
+  --input: color-mix(in oklab, #ff2e3f 18%, transparent);
+  --ring: #ff2e3f;
+  --gradient-primary: linear-gradient(135deg, #ff2e3f 0%, #ff5b5b 100%);
+  --shadow-glow: 0 0 22px -6px color-mix(in oklab, #ff2e3f 65%, transparent);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --sidebar: oklch(0.18 0.005 60);
+  --sidebar-foreground: oklch(0.92 0.02 90);
+  --sidebar-primary: oklch(0.76 0.11 85);
+  --sidebar-primary-foreground: oklch(0.14 0 0);
+  --sidebar-accent: oklch(0.3 0.02 75);
+  --sidebar-accent-foreground: oklch(0.92 0.02 90);
+  --sidebar-border: oklch(0.5 0.08 80 / 35%);
+  --sidebar-ring: oklch(0.76 0.11 85);
 }
 
 .dark {
@@ -140,5 +164,195 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-body);
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+  }
+}
+
+@layer components {
+  .ornate-card {
+    position: relative;
+    background: #0c0c0f;
+    border: 1px solid color-mix(in oklab, var(--gold) 26%, transparent);
+    border-radius: 1rem;
+    box-shadow: 0 0 24px -14px color-mix(in oklab, var(--gold) 70%, transparent);
+  }
+  .ornate-card::before,
+  .ornate-card::after {
+    content: none;
+  }
+
+  .gold-btn {
+    border: 1px solid transparent;
+    background-image: var(--gradient-primary);
+    color: #ffffff;
+    font-family: var(--font-heading);
+    letter-spacing: 0.02em;
+    font-weight: 600;
+    box-shadow: var(--shadow-glow);
+    transition: all 0.2s ease;
+  }
+  .gold-btn:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 0 26px -4px color-mix(in oklab, var(--gold) 75%, transparent);
+  }
+
+  /* --- EmberChat primitives --- */
+  .ember-panel {
+    background: #0c0c0f;
+    border: 1px solid color-mix(in oklab, var(--gold) 24%, transparent);
+    border-radius: 1.25rem;
+    box-shadow: 0 0 26px -16px color-mix(in oklab, var(--gold) 80%, transparent);
+  }
+  .ember-chip {
+    border-radius: 9999px;
+    border: 1px solid color-mix(in oklab, var(--gold) 26%, transparent);
+    background: #101013;
+    color: #b9b9c2;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    white-space: nowrap;
+    transition: all 0.18s ease;
+  }
+  .ember-chip[data-active="true"] {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: #fff;
+    box-shadow: 0 0 16px -4px color-mix(in oklab, var(--gold) 80%, transparent);
+  }
+  .ember-ring {
+    padding: 2px;
+    border-radius: 9999px;
+    background: conic-gradient(from 210deg, #ff2e3f, #ff5b5b, #7a0d16, #ff2e3f);
+    box-shadow: 0 0 14px -4px color-mix(in oklab, var(--gold) 80%, transparent);
+  }
+  .ember-ring-seen {
+    background: #2a2a30;
+    box-shadow: none;
+  }
+  .ember-ctrl {
+    display: flex;
+    height: 52px;
+    width: 52px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: #141418;
+    border: 1px solid color-mix(in oklab, #ffffff 8%, transparent);
+    color: #f2f2f4;
+  }
+}
+
+@keyframes spin-arc { to { transform: rotate(360deg); } }
+.animate-arc { animation: spin-arc 1.2s linear infinite; }
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-fade-in { animation: fade-in 0.8s ease forwards; }
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-down { animation: slide-down 0.4s ease forwards; }
+
+@keyframes unlock {
+  0% { transform: scale(0.85) rotate(-8deg); opacity: 0; }
+  35% { transform: scale(1) rotate(-8deg); opacity: 1; }
+  60% { transform: scale(1) rotate(6deg); }
+  80% { transform: scale(1.08) rotate(0deg); filter: drop-shadow(0 0 40px rgba(214,58,249,0.7)); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.animate-unlock { animation: unlock 1.6s ease-out forwards; }
+
+@keyframes loading-bar {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+.animate-loading-bar { animation: loading-bar 3s ease-in-out forwards; }
+
+/* Private Hub surface — EmberChat near-black with a soft ember bloom */
+.hub-chat-bg,
+.hub-screen-bg {
+  background:
+    radial-gradient(120% 55% at 50% 0%, color-mix(in oklab, #ff2e3f 12%, transparent) 0%, transparent 60%),
+    linear-gradient(180deg, #0b0a0d 0%, #08080a 40%, #050506 100%);
+}
+.hub-bubble-mine {
+  background-image: linear-gradient(135deg, #ff2e3f 0%, #d31220 100%);
+  box-shadow: 0 6px 18px -10px color-mix(in oklab, #ff2e3f 75%, transparent);
+}
+
+/* ---- Message "seen" system (delivered = red, seen = blue→violet) ---- */
+.ember-msg {
+  position: relative;
+  padding-bottom: 10px;
+  border-radius: 18px;
+}
+.ember-msg-unseen {
+  background-image: linear-gradient(160deg, rgba(255, 46, 63, 0.22) 0%, rgba(120, 8, 18, 0.28) 100%);
+  border: 1px solid rgba(255, 46, 63, 0.75);
+  box-shadow: 0 8px 26px -14px rgba(255, 46, 63, 0.9);
+}
+.ember-msg-seen {
+  background-image: linear-gradient(160deg, rgba(38, 132, 255, 0.2) 0%, rgba(120, 40, 200, 0.24) 100%);
+  border: 1px solid rgba(56, 160, 255, 0.75);
+  box-shadow: 0 8px 26px -14px rgba(56, 160, 255, 0.9);
+}
+/* Status line hugging the bottom curve of the bubble */
+.ember-msg-line {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 5px;
+  height: 3px;
+  border-radius: 999px;
+}
+.ember-msg-unseen .ember-msg-line {
+  background-image: linear-gradient(90deg, #ff2e3f 0%, #ff2e3f 100%);
+}
+.ember-msg-seen .ember-msg-line {
+  background-image: linear-gradient(90deg, #22d3ee 0%, #3b82f6 55%, #a855f7 100%);
+}
+.ember-msg-line::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  height: 8px;
+  width: 8px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: currentColor;
+}
+.ember-msg-unseen .ember-msg-line::before { color: #ff2e3f; }
+.ember-msg-seen .ember-msg-line::before { color: #22d3ee; }
+.ember-msg-time-unseen { color: #ff5a67; }
+.ember-msg-time-seen { color: #4aa8ff; }
+.hub-bubble-theirs {
+  background: #141418;
+  border: 1px solid color-mix(in oklab, #ffffff 8%, transparent);
+}
+
+/* Typing indicator — 3-dot wave */
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+.typing-dot {
+  display: inline-block;
+  height: 6px;
+  width: 6px;
+  border-radius: 9999px;
+  background: var(--gold-bright);
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+
+/* Voice-call waveform */
+@keyframes wave-pulse {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1); }
 }
