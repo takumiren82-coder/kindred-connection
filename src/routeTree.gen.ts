@@ -20,9 +20,9 @@ import { Route as HubIndexRouteImport } from './routes/hub.index'
 import { Route as HubGalleryRouteImport } from './routes/hub.gallery'
 import { Route as HubReelsRouteImport } from './routes/hub.reels'
 import { Route as HubStatusRouteImport } from './routes/hub.status'
-import { Route as HubWatchRouteImport } from './routes/hub.watch'
 import { Route as ReaderIdRouteImport } from './routes/reader.$id'
 import { Route as HubChatIdRouteImport } from './routes/hub.chat.$id'
+import { Route as HubWatchIndexRouteImport } from './routes/hub.watch.index'
 import { Route as HubWatchCodeRouteImport } from './routes/hub.watch.$code'
 import { Route as ApiPublicBookIdRouteImport } from './routes/api/public/book.$id'
 
@@ -81,11 +81,6 @@ const HubStatusRoute = HubStatusRouteImport.update({
   path: '/status',
   getParentRoute: () => HubRoute,
 } as any)
-const HubWatchRoute = HubWatchRouteImport.update({
-  id: '/watch',
-  path: '/watch',
-  getParentRoute: () => HubRoute,
-} as any)
 const ReaderIdRoute = ReaderIdRouteImport.update({
   id: '/reader/$id',
   path: '/reader/$id',
@@ -96,10 +91,15 @@ const HubChatIdRoute = HubChatIdRouteImport.update({
   path: '/chat/$id',
   getParentRoute: () => HubRoute,
 } as any)
+const HubWatchIndexRoute = HubWatchIndexRouteImport.update({
+  id: '/watch/',
+  path: '/watch/',
+  getParentRoute: () => HubRoute,
+} as any)
 const HubWatchCodeRoute = HubWatchCodeRouteImport.update({
-  id: '/$code',
-  path: '/$code',
-  getParentRoute: () => HubWatchRoute,
+  id: '/watch/$code',
+  path: '/watch/$code',
+  getParentRoute: () => HubRoute,
 } as any)
 const ApiPublicBookIdRoute = ApiPublicBookIdRouteImport.update({
   id: '/api/public/book/$id',
@@ -118,11 +118,11 @@ export interface FileRoutesByFullPath {
   '/hub/gallery': typeof HubGalleryRoute
   '/hub/reels': typeof HubReelsRoute
   '/hub/status': typeof HubStatusRoute
-  '/hub/watch': typeof HubWatchRouteWithChildren
   '/reader/$id': typeof ReaderIdRoute
   '/hub/': typeof HubIndexRoute
   '/hub/chat/$id': typeof HubChatIdRoute
   '/hub/watch/$code': typeof HubWatchCodeRoute
+  '/hub/watch/': typeof HubWatchIndexRoute
   '/api/public/book/$id': typeof ApiPublicBookIdRoute
 }
 export interface FileRoutesByTo {
@@ -135,11 +135,11 @@ export interface FileRoutesByTo {
   '/hub/gallery': typeof HubGalleryRoute
   '/hub/reels': typeof HubReelsRoute
   '/hub/status': typeof HubStatusRoute
-  '/hub/watch': typeof HubWatchRouteWithChildren
   '/reader/$id': typeof ReaderIdRoute
   '/hub': typeof HubIndexRoute
   '/hub/chat/$id': typeof HubChatIdRoute
   '/hub/watch/$code': typeof HubWatchCodeRoute
+  '/hub/watch': typeof HubWatchIndexRoute
   '/api/public/book/$id': typeof ApiPublicBookIdRoute
 }
 export interface FileRoutesById {
@@ -154,11 +154,11 @@ export interface FileRoutesById {
   '/hub/gallery': typeof HubGalleryRoute
   '/hub/reels': typeof HubReelsRoute
   '/hub/status': typeof HubStatusRoute
-  '/hub/watch': typeof HubWatchRouteWithChildren
   '/reader/$id': typeof ReaderIdRoute
   '/hub/': typeof HubIndexRoute
   '/hub/chat/$id': typeof HubChatIdRoute
   '/hub/watch/$code': typeof HubWatchCodeRoute
+  '/hub/watch/': typeof HubWatchIndexRoute
   '/api/public/book/$id': typeof ApiPublicBookIdRoute
 }
 export interface FileRouteTypes {
@@ -174,11 +174,11 @@ export interface FileRouteTypes {
     | '/hub/gallery'
     | '/hub/reels'
     | '/hub/status'
-    | '/hub/watch'
     | '/reader/$id'
     | '/hub/'
     | '/hub/chat/$id'
     | '/hub/watch/$code'
+    | '/hub/watch/'
     | '/api/public/book/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -191,11 +191,11 @@ export interface FileRouteTypes {
     | '/hub/gallery'
     | '/hub/reels'
     | '/hub/status'
-    | '/hub/watch'
     | '/reader/$id'
     | '/hub'
     | '/hub/chat/$id'
     | '/hub/watch/$code'
+    | '/hub/watch'
     | '/api/public/book/$id'
   id:
     | '__root__'
@@ -209,11 +209,11 @@ export interface FileRouteTypes {
     | '/hub/gallery'
     | '/hub/reels'
     | '/hub/status'
-    | '/hub/watch'
     | '/reader/$id'
     | '/hub/'
     | '/hub/chat/$id'
     | '/hub/watch/$code'
+    | '/hub/watch/'
     | '/api/public/book/$id'
   fileRoutesById: FileRoutesById
 }
@@ -308,13 +308,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HubStatusRouteImport
       parentRoute: typeof HubRoute
     }
-    '/hub/watch': {
-      id: '/hub/watch'
-      path: '/watch'
-      fullPath: '/hub/watch'
-      preLoaderRoute: typeof HubWatchRouteImport
-      parentRoute: typeof HubRoute
-    }
     '/reader/$id': {
       id: '/reader/$id'
       path: '/reader/$id'
@@ -329,12 +322,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HubChatIdRouteImport
       parentRoute: typeof HubRoute
     }
+    '/hub/watch/': {
+      id: '/hub/watch/'
+      path: '/watch'
+      fullPath: '/hub/watch/'
+      preLoaderRoute: typeof HubWatchIndexRouteImport
+      parentRoute: typeof HubRoute
+    }
     '/hub/watch/$code': {
       id: '/hub/watch/$code'
-      path: '/$code'
+      path: '/watch/$code'
       fullPath: '/hub/watch/$code'
       preLoaderRoute: typeof HubWatchCodeRouteImport
-      parentRoute: typeof HubWatchRoute
+      parentRoute: typeof HubRoute
     }
     '/api/public/book/$id': {
       id: '/api/public/book/$id'
@@ -346,34 +346,24 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface HubWatchRouteChildren {
-  HubWatchCodeRoute: typeof HubWatchCodeRoute
-}
-
-const HubWatchRouteChildren: HubWatchRouteChildren = {
-  HubWatchCodeRoute: HubWatchCodeRoute,
-}
-
-const HubWatchRouteWithChildren = HubWatchRoute._addFileChildren(
-  HubWatchRouteChildren,
-)
-
 interface HubRouteChildren {
   HubGalleryRoute: typeof HubGalleryRoute
   HubReelsRoute: typeof HubReelsRoute
   HubStatusRoute: typeof HubStatusRoute
-  HubWatchRoute: typeof HubWatchRouteWithChildren
   HubIndexRoute: typeof HubIndexRoute
   HubChatIdRoute: typeof HubChatIdRoute
+  HubWatchCodeRoute: typeof HubWatchCodeRoute
+  HubWatchIndexRoute: typeof HubWatchIndexRoute
 }
 
 const HubRouteChildren: HubRouteChildren = {
   HubGalleryRoute: HubGalleryRoute,
   HubReelsRoute: HubReelsRoute,
   HubStatusRoute: HubStatusRoute,
-  HubWatchRoute: HubWatchRouteWithChildren,
   HubIndexRoute: HubIndexRoute,
   HubChatIdRoute: HubChatIdRoute,
+  HubWatchCodeRoute: HubWatchCodeRoute,
+  HubWatchIndexRoute: HubWatchIndexRoute,
 }
 
 const HubRouteWithChildren = HubRoute._addFileChildren(HubRouteChildren)
@@ -392,3 +382,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
