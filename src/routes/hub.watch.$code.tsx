@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowLeft,
   Check,
@@ -8,6 +9,8 @@ import {
   Hand,
   Heart,
   Info,
+  ListVideo,
+  Loader2,
   Lock,
   Maximize2,
   Mic,
@@ -33,16 +36,19 @@ import { supabase } from "@/lib/supabase";
 import { YouTubePlayer, type YtHandle } from "@/components/watch/YouTubePlayer";
 import { useVoiceMesh } from "@/hooks/useVoiceMesh";
 import { getMyId, getMyName } from "@/lib/identity";
+import { searchYouTube, youtubeMeta } from "@/lib/youtube.functions";
 import {
   DEFAULT_SETTINGS,
   fmtTime,
   getRecent,
   isHostLocal,
+  parseYouTubeId,
   saveRecent,
   type RoomSettings,
   type WatchChatMsg,
   type WatchVideo,
 } from "@/lib/watch";
+
 
 export const Route = createFileRoute("/hub/watch/$code")({
   component: WatchRoom,
