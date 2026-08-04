@@ -9,41 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as ProfileRouteImport } from './routes/profile'
-import { Route as LibraryRouteImport } from './routes/library'
-import { Route as HubRouteImport } from './routes/hub'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as HubIndexRouteImport } from './routes/hub.index'
-import { Route as ReaderIdRouteImport } from './routes/reader.$id'
-import { Route as HubWatchRouteImport } from './routes/hub.watch'
-import { Route as HubStatusRouteImport } from './routes/hub.status'
-import { Route as HubReelsRouteImport } from './routes/hub.reels'
-import { Route as HubGalleryRouteImport } from './routes/hub.gallery'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as HubRouteImport } from './routes/hub'
+import { Route as LibraryRouteImport } from './routes/library'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ArticleIdRouteImport } from './routes/article.$id'
-import { Route as HubWatchCodeRouteImport } from './routes/hub.watch.$code'
+import { Route as HubIndexRouteImport } from './routes/hub.index'
+import { Route as HubGalleryRouteImport } from './routes/hub.gallery'
+import { Route as HubReelsRouteImport } from './routes/hub.reels'
+import { Route as HubStatusRouteImport } from './routes/hub.status'
+import { Route as HubWatchRouteImport } from './routes/hub.watch'
+import { Route as ReaderIdRouteImport } from './routes/reader.$id'
 import { Route as HubChatIdRouteImport } from './routes/hub.chat.$id'
+import { Route as HubWatchCodeRouteImport } from './routes/hub.watch.$code'
 import { Route as ApiPublicBookIdRouteImport } from './routes/api/public/book.$id'
 
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProfileRoute = ProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LibraryRoute = LibraryRouteImport.update({
-  id: '/library',
-  path: '/library',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HubRoute = HubRouteImport.update({
-  id: '/hub',
-  path: '/hub',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -51,9 +36,29 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const HubRoute = HubRouteImport.update({
+  id: '/hub',
+  path: '/hub',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LibraryRoute = LibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArticleIdRoute = ArticleIdRouteImport.update({
+  id: '/article/$id',
+  path: '/article/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HubIndexRoute = HubIndexRouteImport.update({
@@ -61,19 +66,9 @@ const HubIndexRoute = HubIndexRouteImport.update({
   path: '/',
   getParentRoute: () => HubRoute,
 } as any)
-const ReaderIdRoute = ReaderIdRouteImport.update({
-  id: '/reader/$id',
-  path: '/reader/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HubWatchRoute = HubWatchRouteImport.update({
-  id: '/watch',
-  path: '/watch',
-  getParentRoute: () => HubRoute,
-} as any)
-const HubStatusRoute = HubStatusRouteImport.update({
-  id: '/status',
-  path: '/status',
+const HubGalleryRoute = HubGalleryRouteImport.update({
+  id: '/gallery',
+  path: '/gallery',
   getParentRoute: () => HubRoute,
 } as any)
 const HubReelsRoute = HubReelsRouteImport.update({
@@ -81,25 +76,30 @@ const HubReelsRoute = HubReelsRouteImport.update({
   path: '/reels',
   getParentRoute: () => HubRoute,
 } as any)
-const HubGalleryRoute = HubGalleryRouteImport.update({
-  id: '/gallery',
-  path: '/gallery',
+const HubStatusRoute = HubStatusRouteImport.update({
+  id: '/status',
+  path: '/status',
   getParentRoute: () => HubRoute,
 } as any)
-const ArticleIdRoute = ArticleIdRouteImport.update({
-  id: '/article/$id',
-  path: '/article/$id',
-  getParentRoute: () => rootRouteImport,
+const HubWatchRoute = HubWatchRouteImport.update({
+  id: '/watch',
+  path: '/watch',
+  getParentRoute: () => HubRoute,
 } as any)
-const HubWatchCodeRoute = HubWatchCodeRouteImport.update({
-  id: '/$code',
-  path: '/$code',
-  getParentRoute: () => HubWatchRoute,
+const ReaderIdRoute = ReaderIdRouteImport.update({
+  id: '/reader/$id',
+  path: '/reader/$id',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const HubChatIdRoute = HubChatIdRouteImport.update({
   id: '/chat/$id',
   path: '/chat/$id',
   getParentRoute: () => HubRoute,
+} as any)
+const HubWatchCodeRoute = HubWatchCodeRouteImport.update({
+  id: '/$code',
+  path: '/$code',
+  getParentRoute: () => HubWatchRoute,
 } as any)
 const ApiPublicBookIdRoute = ApiPublicBookIdRouteImport.update({
   id: '/api/public/book/$id',
@@ -231,32 +231,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/profile': {
-      id: '/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof ProfileRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/library': {
-      id: '/library'
-      path: '/library'
-      fullPath: '/library'
-      preLoaderRoute: typeof LibraryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/hub': {
-      id: '/hub'
-      path: '/hub'
-      fullPath: '/hub'
-      preLoaderRoute: typeof HubRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -266,11 +245,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/hub': {
+      id: '/hub'
+      path: '/hub'
+      fullPath: '/hub'
+      preLoaderRoute: typeof HubRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/library': {
+      id: '/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof LibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/article/$id': {
+      id: '/article/$id'
+      path: '/article/$id'
+      fullPath: '/article/$id'
+      preLoaderRoute: typeof ArticleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/hub/': {
@@ -280,25 +287,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HubIndexRouteImport
       parentRoute: typeof HubRoute
     }
-    '/reader/$id': {
-      id: '/reader/$id'
-      path: '/reader/$id'
-      fullPath: '/reader/$id'
-      preLoaderRoute: typeof ReaderIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/hub/watch': {
-      id: '/hub/watch'
-      path: '/watch'
-      fullPath: '/hub/watch'
-      preLoaderRoute: typeof HubWatchRouteImport
-      parentRoute: typeof HubRoute
-    }
-    '/hub/status': {
-      id: '/hub/status'
-      path: '/status'
-      fullPath: '/hub/status'
-      preLoaderRoute: typeof HubStatusRouteImport
+    '/hub/gallery': {
+      id: '/hub/gallery'
+      path: '/gallery'
+      fullPath: '/hub/gallery'
+      preLoaderRoute: typeof HubGalleryRouteImport
       parentRoute: typeof HubRoute
     }
     '/hub/reels': {
@@ -308,26 +301,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HubReelsRouteImport
       parentRoute: typeof HubRoute
     }
-    '/hub/gallery': {
-      id: '/hub/gallery'
-      path: '/gallery'
-      fullPath: '/hub/gallery'
-      preLoaderRoute: typeof HubGalleryRouteImport
+    '/hub/status': {
+      id: '/hub/status'
+      path: '/status'
+      fullPath: '/hub/status'
+      preLoaderRoute: typeof HubStatusRouteImport
       parentRoute: typeof HubRoute
     }
-    '/article/$id': {
-      id: '/article/$id'
-      path: '/article/$id'
-      fullPath: '/article/$id'
-      preLoaderRoute: typeof ArticleIdRouteImport
-      parentRoute: typeof rootRouteImport
+    '/hub/watch': {
+      id: '/hub/watch'
+      path: '/watch'
+      fullPath: '/hub/watch'
+      preLoaderRoute: typeof HubWatchRouteImport
+      parentRoute: typeof HubRoute
     }
-    '/hub/watch/$code': {
-      id: '/hub/watch/$code'
-      path: '/$code'
-      fullPath: '/hub/watch/$code'
-      preLoaderRoute: typeof HubWatchCodeRouteImport
-      parentRoute: typeof HubWatchRoute
+    '/reader/$id': {
+      id: '/reader/$id'
+      path: '/reader/$id'
+      fullPath: '/reader/$id'
+      preLoaderRoute: typeof ReaderIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/hub/chat/$id': {
       id: '/hub/chat/$id'
@@ -335,6 +328,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/hub/chat/$id'
       preLoaderRoute: typeof HubChatIdRouteImport
       parentRoute: typeof HubRoute
+    }
+    '/hub/watch/$code': {
+      id: '/hub/watch/$code'
+      path: '/$code'
+      fullPath: '/hub/watch/$code'
+      preLoaderRoute: typeof HubWatchCodeRouteImport
+      parentRoute: typeof HubWatchRoute
     }
     '/api/public/book/$id': {
       id: '/api/public/book/$id'
@@ -392,3 +392,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
