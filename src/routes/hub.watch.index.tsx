@@ -30,7 +30,7 @@ import {
 } from "@/lib/watch";
 import { getMyName } from "@/lib/identity";
 
-export const Route = createFileRoute("/hub/watch")({
+export const Route = createFileRoute("/hub/watch/")({
   component: WatchTogether,
   head: () => ({
     meta: [
