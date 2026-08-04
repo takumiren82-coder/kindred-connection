@@ -368,6 +368,22 @@ function WatchRoom() {
     }
   };
 
+  // Host picks / changes the video for everyone in the room.
+  const pickVideo = (v: WatchVideo) => {
+    setVideoSheet(false);
+    setVideo(v);
+    setNeedsTap(false);
+    currentVideoId.current = v.id;
+    const p = player.current;
+    p?.unMute();
+    p?.load(v.id, 0);
+    p?.play();
+    setPlaying(true);
+    setCur(0);
+    broadcastState({ video: v, time: 0, playing: true, at: Date.now() });
+  };
+
+
   const leave = () => {
     setLeaving(true);
     setTimeout(() => void navigate({ to: "/hub/watch" }), 1400);
