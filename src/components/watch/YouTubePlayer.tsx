@@ -22,6 +22,7 @@ export interface YtHandle {
   load: (id: string, startAt?: number) => void;
   mute: () => void;
   unMute: () => void;
+  setVolume: (volume: number) => void;
 }
 
 interface Props {
@@ -29,6 +30,7 @@ interface Props {
   onReady?: () => void;
   /** 1 = playing, 2 = paused, 0 = ended, 3 = buffering */
   onStateChange?: (state: number) => void;
+  onError?: (code: number) => void;
   className?: string;
 }
 
@@ -53,7 +55,7 @@ function loadApi(): Promise<void> {
 }
 
 export const YouTubePlayer = forwardRef<YtHandle, Props>(function YouTubePlayer(
-  { videoId, onReady, onStateChange, className },
+  { videoId, onReady, onStateChange, onError, className },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -61,8 +63,10 @@ export const YouTubePlayer = forwardRef<YtHandle, Props>(function YouTubePlayer(
   const [ready, setReady] = useState(false);
   const cbReady = useRef(onReady);
   const cbState = useRef(onStateChange);
+  const cbError = useRef(onError);
   cbReady.current = onReady;
   cbState.current = onStateChange;
+  cbError.current = onError;
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +82,8 @@ export const YouTubePlayer = forwardRef<YtHandle, Props>(function YouTubePlayer(
           disablekb: 1,
           iv_load_policy: 3,
           fs: 0,
+          enablejsapi: 1,
+          origin: window.location.origin,
         },
         events: {
           onReady: () => {
@@ -85,6 +91,7 @@ export const YouTubePlayer = forwardRef<YtHandle, Props>(function YouTubePlayer(
             cbReady.current?.();
           },
           onStateChange: (e: YT.OnStateChangeEvent) => cbState.current?.(e.data as number),
+          onError: (e: YT.OnErrorEvent) => cbError.current?.(e.data as number),
         },
       });
     });
@@ -175,6 +182,13 @@ export const YouTubePlayer = forwardRef<YtHandle, Props>(function YouTubePlayer(
       unMute: () => {
         try {
           playerRef.current?.unMute();
+        } catch {
+          /* ignore */
+        }
+      },
+      setVolume: (volume) => {
+        try {
+          playerRef.current?.setVolume(Math.max(0, Math.min(100, volume)));
         } catch {
           /* ignore */
         }

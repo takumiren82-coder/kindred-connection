@@ -117,6 +117,7 @@ function WatchRoom() {
   const [copied, setCopied] = useState(false);
   const [memberQuery, setMemberQuery] = useState("");
   const [typingFrom, setTypingFrom] = useState<string>("");
+  const [playerError, setPlayerError] = useState("");
 
   const player = useRef<YtHandle>(null);
   const chRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -361,17 +362,21 @@ function WatchRoom() {
   };
 
   const startWatching = () => {
+    if (!video) return;
     setNeedsTap(false);
+    setPlayerError("");
     const p = player.current;
     const s = lastStateRef.current;
     p?.unMute();
-    if (s) applyState(s);
-    else if (isHost && video) {
-      p?.load(video.id, 0);
+    p?.setVolume(100);
+    if (isHost) {
+      const startAt = s?.video?.id === video.id ? s.time : 0;
+      p?.load(video.id, startAt);
       p?.play();
       setPlaying(true);
-      broadcastState({ playing: true, time: 0, at: Date.now() });
-    }
+      broadcastState({ video, playing: true, time: startAt, at: Date.now() });
+    } else if (s) applyState(s);
+    else send("req", {});
   };
 
   // Host picks / changes the video for everyone in the room.
@@ -379,9 +384,11 @@ function WatchRoom() {
     setVideoSheet(false);
     setVideo(v);
     setNeedsTap(false);
+    setPlayerError("");
     currentVideoId.current = v.id;
     const p = player.current;
     p?.unMute();
+    p?.setVolume(100);
     p?.load(v.id, 0);
     p?.play();
     setPlaying(true);
@@ -419,6 +426,15 @@ function WatchRoom() {
     }
   };
 
+  const onPlayerError = (code: number) => {
+    setPlaying(false);
+    setPlayerError(
+      code === 101 || code === 150
+        ? "This uploader does not allow the video to play here. Please choose another video."
+        : "This video is unavailable right now. Please choose another video.",
+    );
+  };
+
   const filteredMembers = members.filter((m) =>
     m.name.toLowerCase().includes(memberQuery.toLowerCase()),
   );
@@ -453,6 +469,7 @@ function WatchRoom() {
               videoId={video.id}
               onReady={onPlayerReady}
               onStateChange={onPlayerState}
+              onError={onPlayerError}
               className="h-full w-full"
             />
           ) : (
@@ -531,7 +548,7 @@ function WatchRoom() {
           )}
 
           {/* tap-to-start (browsers block autoplay with sound) */}
-          {needsTap && (
+          {video && needsTap && !playerError && (
             <button
               onClick={startWatching}
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/75 backdrop-blur-sm"
@@ -542,6 +559,21 @@ function WatchRoom() {
               <span className="text-[14px] font-semibold">Tap to join the watch party</span>
               <span className="text-[11.5px] text-neutral-400">You'll be synced to everyone else</span>
             </button>
+          )}
+
+          {video && playerError && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/90 px-7 text-center">
+              <p className="text-[13.5px] font-semibold text-neutral-100">Video can’t play in this room</p>
+              <p className="text-[11.5px] leading-relaxed text-neutral-400">{playerError}</p>
+              {canControl && (
+                <button
+                  onClick={() => setVideoSheet(true)}
+                  className="rounded-full bg-primary px-5 py-2 text-[13px] font-semibold text-white"
+                >
+                  Choose another video
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -1023,14 +1055,11 @@ function VideoPicker({ onPick }: { onPick: (v: WatchVideo) => void }) {
     setLoading(true);
     const r = await meta({ data: { id } });
     setLoading(false);
-    onPick(
-      r.video ?? {
-        id,
-        title: "YouTube video",
-        channel: "",
-        thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
-      },
-    );
+    if (!r.video) {
+      setErr(r.error ?? "This video cannot be played inside a watch room.");
+      return;
+    }
+    onPick(r.video);
   };
 
   return (
