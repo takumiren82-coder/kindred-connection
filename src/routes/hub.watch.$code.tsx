@@ -227,8 +227,9 @@ function WatchRoom() {
         setTimeout(() => setTypingFrom(""), 2200);
       })
       .on("broadcast", { event: "muteall" }, () => {
-        if (voice.micOn) void voice.toggleMic();
+        if (voiceRef.current.micOn) void voiceRef.current.toggleMic();
       });
+
 
     void ch.subscribe(async (status) => {
       if (status !== "SUBSCRIBED") return;
