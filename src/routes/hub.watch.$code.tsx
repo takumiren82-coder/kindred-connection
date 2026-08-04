@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowLeft,
   Check,
@@ -8,6 +9,8 @@ import {
   Hand,
   Heart,
   Info,
+  ListVideo,
+  Loader2,
   Lock,
   Maximize2,
   Mic,
@@ -33,16 +36,19 @@ import { supabase } from "@/lib/supabase";
 import { YouTubePlayer, type YtHandle } from "@/components/watch/YouTubePlayer";
 import { useVoiceMesh } from "@/hooks/useVoiceMesh";
 import { getMyId, getMyName } from "@/lib/identity";
+import { searchYouTube, youtubeMeta } from "@/lib/youtube.functions";
 import {
   DEFAULT_SETTINGS,
   fmtTime,
   getRecent,
   isHostLocal,
+  parseYouTubeId,
   saveRecent,
   type RoomSettings,
   type WatchChatMsg,
   type WatchVideo,
 } from "@/lib/watch";
+
 
 export const Route = createFileRoute("/hub/watch/$code")({
   component: WatchRoom,
@@ -121,8 +127,14 @@ function WatchRoom() {
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const voice = useVoiceMesh(code, myId, settings.voiceChat);
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
+
+  // in-room video picker (host)
+  const [videoSheet, setVideoSheet] = useState(false);
 
   const link = typeof window !== "undefined" ? `${window.location.origin}/hub/watch/${code}` : "";
+
 
   const send = useCallback(
     (event: string, payload: Record<string, unknown>) => {
@@ -221,8 +233,9 @@ function WatchRoom() {
         setTimeout(() => setTypingFrom(""), 2200);
       })
       .on("broadcast", { event: "muteall" }, () => {
-        if (voice.micOn) void voice.toggleMic();
+        if (voiceRef.current.micOn) void voiceRef.current.toggleMic();
       });
+
 
     void ch.subscribe(async (status) => {
       if (status !== "SUBSCRIBED") return;
@@ -361,6 +374,22 @@ function WatchRoom() {
     }
   };
 
+  // Host picks / changes the video for everyone in the room.
+  const pickVideo = (v: WatchVideo) => {
+    setVideoSheet(false);
+    setVideo(v);
+    setNeedsTap(false);
+    currentVideoId.current = v.id;
+    const p = player.current;
+    p?.unMute();
+    p?.load(v.id, 0);
+    p?.play();
+    setPlaying(true);
+    setCur(0);
+    broadcastState({ video: v, time: 0, playing: true, at: Date.now() });
+  };
+
+
   const leave = () => {
     setLeaving(true);
     setTimeout(() => void navigate({ to: "/hub/watch" }), 1400);
@@ -429,9 +458,20 @@ function WatchRoom() {
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-neutral-500">
               <MonitorPlay className="h-10 w-10" />
-              <p className="text-[13px]">Waiting for the host to pick a video…</p>
+              <p className="text-[13px]">
+                {canControl ? "No video yet — pick one to start." : "Waiting for the host to pick a video…"}
+              </p>
+              {canControl && (
+                <button
+                  onClick={() => setVideoSheet(true)}
+                  className="relative z-20 rounded-full bg-primary px-5 py-2 text-[13.5px] font-semibold text-white"
+                >
+                  Choose a video
+                </button>
+              )}
             </div>
           )}
+
 
           {/* transparent shield: taps go to our own controls, not YouTube's */}
           <div className="absolute inset-0" onClick={togglePlay} />
@@ -527,7 +567,7 @@ function WatchRoom() {
       {!theater && (
         <>
           {/* control row */}
-          <div className="mx-4 mt-3 grid grid-cols-5 gap-2 rounded-2xl border border-primary/20 bg-[#0d0708]/80 p-2.5">
+          <div className="mx-4 mt-3 grid grid-cols-6 gap-1.5 rounded-2xl border border-primary/20 bg-[#0d0708]/80 p-2.5">
             <CtrlBtn
               active={voice.micOn}
               disabled={!settings.voiceChat}
@@ -541,9 +581,16 @@ function WatchRoom() {
               label="Speaker"
               onClick={voice.toggleSpeaker}
             />
+            <CtrlBtn
+              Icon={ListVideo}
+              label="Video"
+              disabled={!canControl}
+              onClick={() => setVideoSheet(true)}
+            />
             <CtrlBtn Icon={MonitorPlay} label="Screen" onClick={() => setTheater(true)} />
             <CtrlBtn Icon={Heart} label="React" onClick={() => react("❤️")} />
             <CtrlBtn danger Icon={X} label="Leave" onClick={leave} />
+
           </div>
 
           {/* tabs */}
@@ -760,6 +807,14 @@ function WatchRoom() {
         </>
       )}
 
+      {/* video picker (host / anyone allowed to control) */}
+      {videoSheet && (
+        <Sheet title="Play a Video" onClose={() => setVideoSheet(false)}>
+          <VideoPicker onPick={pickVideo} />
+        </Sheet>
+      )}
+
+
       {/* invite sheet */}
       {invite && (
         <Sheet title="Invite to Room" onClose={() => setInvite(false)}>
@@ -926,6 +981,119 @@ function Sheet({
           </button>
         </div>
         <div className="border-t border-white/5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function VideoPicker({ onPick }: { onPick: (v: WatchVideo) => void }) {
+  const search = useServerFn(searchYouTube);
+  const meta = useServerFn(youtubeMeta);
+  const [q, setQ] = useState("");
+  const [link, setLink] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [results, setResults] = useState<WatchVideo[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const run = useCallback(
+    async (query: string) => {
+      if (!query.trim()) return;
+      setLoading(true);
+      setErr("");
+      const res = await search({ data: { q: query.trim() } });
+      setLoading(false);
+      const e = "error" in res ? res.error : undefined;
+      if (e) setErr(e);
+      setResults(res.videos);
+    },
+    [search],
+  );
+
+  useEffect(() => {
+    void run("trending movies trailer");
+  }, [run]);
+
+  const useLink = async () => {
+    const id = parseYouTubeId(link);
+    if (!id) {
+      setErr("That doesn't look like a YouTube link.");
+      return;
+    }
+    setLoading(true);
+    const r = await meta({ data: { id } });
+    setLoading(false);
+    onPick(
+      r.video ?? {
+        id,
+        title: "YouTube video",
+        channel: "",
+        thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+      },
+    );
+  };
+
+  return (
+    <div className="max-h-[70vh] overflow-y-auto px-4 pb-4 pt-3">
+      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0d0708] px-3 py-2.5">
+        <Search className="h-4 w-4 text-neutral-500" />
+        <input
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            if (timer.current) clearTimeout(timer.current);
+            timer.current = setTimeout(() => void run(e.target.value), 350);
+          }}
+          placeholder="Search YouTube"
+          className="flex-1 bg-transparent text-[14.5px] outline-none placeholder:text-neutral-600"
+        />
+        {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/10 bg-[#0d0708] p-2">
+        <input
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="Paste YouTube link"
+          className="flex-1 bg-transparent px-2 py-1.5 text-[14px] outline-none placeholder:text-neutral-600"
+        />
+        <button
+          onClick={() => void useLink()}
+          className="rounded-lg bg-primary/15 px-3 py-1.5 text-[13px] font-semibold text-primary"
+        >
+          Play
+        </button>
+      </div>
+
+      {err && <p className="mt-2 text-[12px] text-primary">{err}</p>}
+
+      <div className="mt-4 space-y-2.5">
+        {results.map((v) => (
+          <button
+            key={v.id}
+            onClick={() => onPick(v)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-[#0d0708]/80 p-2.5 text-left active:border-primary"
+          >
+            <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-neutral-900">
+              <img src={v.thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
+              {v.duration && (
+                <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 text-[9.5px] font-medium">
+                  {v.duration}
+                </span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-2 text-[13.5px] font-medium leading-snug">{v.title}</p>
+              <p className="mt-0.5 truncate text-[11px] text-neutral-500">
+                {v.channel}
+                {v.views ? ` · ${v.views}` : ""}
+              </p>
+            </div>
+          </button>
+        ))}
+        {!loading && results.length === 0 && (
+          <p className="py-6 text-center text-[13px] text-neutral-600">No results yet.</p>
+        )}
       </div>
     </div>
   );
