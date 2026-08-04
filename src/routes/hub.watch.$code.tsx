@@ -550,7 +550,7 @@ function WatchRoom() {
       {!theater && (
         <>
           {/* control row */}
-          <div className="mx-4 mt-3 grid grid-cols-5 gap-2 rounded-2xl border border-primary/20 bg-[#0d0708]/80 p-2.5">
+          <div className="mx-4 mt-3 grid grid-cols-6 gap-1.5 rounded-2xl border border-primary/20 bg-[#0d0708]/80 p-2.5">
             <CtrlBtn
               active={voice.micOn}
               disabled={!settings.voiceChat}
@@ -564,9 +564,16 @@ function WatchRoom() {
               label="Speaker"
               onClick={voice.toggleSpeaker}
             />
+            <CtrlBtn
+              Icon={ListVideo}
+              label="Video"
+              disabled={!canControl}
+              onClick={() => setVideoSheet(true)}
+            />
             <CtrlBtn Icon={MonitorPlay} label="Screen" onClick={() => setTheater(true)} />
             <CtrlBtn Icon={Heart} label="React" onClick={() => react("❤️")} />
             <CtrlBtn danger Icon={X} label="Leave" onClick={leave} />
+
           </div>
 
           {/* tabs */}
