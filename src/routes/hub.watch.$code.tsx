@@ -1003,7 +1003,8 @@ function VideoPicker({ onPick }: { onPick: (v: WatchVideo) => void }) {
       setErr("");
       const res = await search({ data: { q: query.trim() } });
       setLoading(false);
-      if (res.error) setErr(res.error);
+      const e = "error" in res ? res.error : undefined;
+      if (e) setErr(e);
       setResults(res.videos);
     },
     [search],
