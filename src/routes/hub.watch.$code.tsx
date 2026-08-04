@@ -369,13 +369,14 @@ function WatchRoom() {
     const s = lastStateRef.current;
     p?.unMute();
     p?.setVolume(100);
-    if (s) applyState(s);
-    else if (isHost && video) {
-      p?.load(video.id, 0);
+    if (isHost) {
+      const startAt = s?.video?.id === video.id ? s.time : 0;
+      p?.load(video.id, startAt);
       p?.play();
       setPlaying(true);
-      broadcastState({ playing: true, time: 0, at: Date.now() });
-    }
+      broadcastState({ video, playing: true, time: startAt, at: Date.now() });
+    } else if (s) applyState(s);
+    else send("req", {});
   };
 
   // Host picks / changes the video for everyone in the room.
