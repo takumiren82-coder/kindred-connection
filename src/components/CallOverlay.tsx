@@ -797,6 +797,9 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         {/* Controls */}
         <div className="mt-auto flex flex-wrap items-center justify-center gap-5 pb-2">{controls}</div>
         {noteSheet}
+      {langSheet}
+      {statusStrip}
+      {acceptGate}
       </div>
     );
   }
@@ -885,6 +888,9 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         {controls}
       </div>
       {noteSheet}
+      {langSheet}
+      {statusStrip}
+      {acceptGate}
     </div>
   );
 }
