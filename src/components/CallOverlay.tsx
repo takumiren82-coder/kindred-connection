@@ -201,11 +201,22 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         if (payload.from === myId) return;
         peerReady.current = true;
         flushLocalIce();
+        if (payload.lang) peerLangHandler.current(payload.lang);
+        channel.send({ type: "broadcast", event: "lang", payload: { from: myId, lang: myLangRef.current } });
         if (myOffer.current) {
           channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer: myOffer.current, peerName, video } });
         } else if (myAnswer.current) {
           channel.send({ type: "broadcast", event: "answer", payload: { from: myId, answer: myAnswer.current } });
         }
+      })
+      .on("broadcast", { event: "lang" }, ({ payload }) => {
+        if (payload.from === myId) return;
+        if (payload.lang) peerLangHandler.current(payload.lang);
+      })
+      // Translated speech arriving from the peer — already in MY language.
+      .on("broadcast", { event: "xlate" }, ({ payload }) => {
+        if (payload.from === myId) return;
+        xlateHandler.current(payload as { text: string; sentAt: number });
       })
       .on("broadcast", { event: "ice" }, async ({ payload }) => {
         if (payload.from === myId) return;
