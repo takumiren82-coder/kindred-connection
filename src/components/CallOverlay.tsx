@@ -598,6 +598,13 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         <NotebookPen className="h-[22px] w-[22px]" />
       </button>
       <button
+        onClick={() => { void unlockAudio(); setLangOpen(true); }}
+        aria-label="Translation"
+        className={`ember-ctrl ${xlateOn ? "border-primary/70 bg-primary/15 text-primary" : ""}`}
+      >
+        <Languages className="h-[22px] w-[22px]" />
+      </button>
+      <button
         onClick={() => endCall()}
         aria-label="End call"
         className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-primary text-white shadow-[0_10px_26px_-8px_rgba(255,46,63,0.9)] active:scale-95"
@@ -606,6 +613,123 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
       </button>
     </>
   );
+
+  const langSheet = langOpen ? (
+    <div className="absolute inset-0 z-30 flex items-end bg-black/70 backdrop-blur-sm" onClick={() => setLangOpen(false)}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full rounded-t-3xl border-t border-border bg-[#0c0c0f] px-5 pb-8 pt-5"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-heading text-sm font-semibold text-foreground">Live Translation</h3>
+          <button onClick={() => setLangOpen(false)} aria-label="Close" className="text-muted-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <label className="mb-4 flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3">
+          <span className="text-[13px] text-foreground">Translate my voice</span>
+          <input
+            type="checkbox"
+            checked={xlateOn}
+            onChange={(e) => { void unlockAudio(); setXlateOn(e.target.checked); }}
+            className="h-5 w-9 accent-[var(--color-primary,#ff2e3f)]"
+          />
+        </label>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="mb-1 text-[11px] text-muted-foreground">My language</p>
+            <select
+              value={myLang}
+              onChange={(e) => setMyLang(e.target.value as LangCode)}
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-[13px] text-foreground outline-none"
+            >
+              {Object.entries(LANGS).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] text-muted-foreground">Other person</p>
+            <select
+              value={peerLang}
+              onChange={(e) => setPeerLang(e.target.value as LangCode)}
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-[13px] text-foreground outline-none"
+            >
+              {Object.entries(LANGS).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          {xStatus || (xlateOn ? "starting…" : "Off — normal call audio only.")}
+          {xLatency != null && xlateOn ? ` · ${xLatency} ms` : ""}
+        </p>
+        {(lastHeard || xLast) && (
+          <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground/80">
+            {listening && lastHeard ? `🎙 ${lastHeard}` : ""} {xLast ? `· ${xLast}` : ""}
+          </p>
+        )}
+        <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground/70">
+          Your microphone audio is processed live to produce translated speech. Nothing is recorded or stored.
+        </p>
+      </div>
+    </div>
+  ) : null;
+
+  const statusStrip = (
+    <>
+      {micError && (
+        <div className="pointer-events-none absolute inset-x-0 top-20 z-20 mx-auto w-fit rounded-full bg-primary/20 px-4 py-1.5 text-[11px] text-primary">
+          {micError}
+        </div>
+      )}
+      {needTap && (
+        <button
+          onClick={() => { void unlockAudio(); ensurePlay(); }}
+          className="absolute inset-x-0 top-28 z-30 mx-auto w-fit rounded-full bg-primary px-5 py-2 text-[12px] font-semibold text-white"
+        >
+          Tap to hear caller
+        </button>
+      )}
+      {xlateOn && (
+        <div className="pointer-events-none absolute inset-x-0 top-32 z-20 mx-auto w-fit rounded-full bg-primary/15 px-3 py-1 text-[10px] text-primary">
+          Translation on · {LANGS[myLang].label} ⇄ {LANGS[peerLang].label}
+          {xStatus ? ` · ${xStatus}` : ""}
+        </div>
+      )}
+    </>
+  );
+
+  // Incoming call must be accepted first — that tap grants mic + audio playback.
+  const acceptGate = !accepted ? (
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-end bg-[#08080a]/95 pb-16">
+      <span className="mb-3 font-heading text-[20px] font-semibold text-foreground">{peerName}</span>
+      <span className="mb-10 text-[13px] text-muted-foreground">
+        Incoming {video ? "video" : "voice"} call…
+      </span>
+      <div className="flex items-center gap-10">
+        <button
+          onClick={() => { onClose(); }}
+          aria-label="Decline"
+          className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-primary text-white active:scale-95"
+        >
+          <PhoneOff className="h-6 w-6" />
+        </button>
+        <button
+          onClick={() => { void unlockAudio(); setAccepted(true); }}
+          aria-label="Accept"
+          className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-emerald-500 text-white active:scale-95"
+        >
+          <Phone className="h-6 w-6" />
+        </button>
+      </div>
+    </div>
+  ) : null;
+
 
   const noteSheet = noteOpen ? (
     <div className="absolute inset-0 z-30 flex items-end bg-black/70 backdrop-blur-sm" onClick={() => setNoteOpen(false)}>
