@@ -22,6 +22,7 @@ import { Route as HubReelsRouteImport } from './routes/hub.reels'
 import { Route as HubStatusRouteImport } from './routes/hub.status'
 import { Route as HubWatchRouteImport } from './routes/hub.watch'
 import { Route as ReaderIdRouteImport } from './routes/reader.$id'
+import { Route as ApiPublicTtsRouteImport } from './routes/api/public/tts'
 import { Route as HubChatIdRouteImport } from './routes/hub.chat.$id'
 import { Route as HubWatchIndexRouteImport } from './routes/hub.watch.index'
 import { Route as HubWatchCodeRouteImport } from './routes/hub.watch.$code'
@@ -92,6 +93,11 @@ const ReaderIdRoute = ReaderIdRouteImport.update({
   path: '/reader/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicTtsRoute = ApiPublicTtsRouteImport.update({
+  id: '/api/public/tts',
+  path: '/api/public/tts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HubChatIdRoute = HubChatIdRouteImport.update({
   id: '/chat/$id',
   path: '/chat/$id',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/hub/watch': typeof HubWatchRouteWithChildren
   '/reader/$id': typeof ReaderIdRoute
   '/hub/': typeof HubIndexRoute
+  '/api/public/tts': typeof ApiPublicTtsRoute
   '/hub/chat/$id': typeof HubChatIdRoute
   '/hub/watch/$code': typeof HubWatchCodeRoute
   '/hub/watch/': typeof HubWatchIndexRoute
@@ -144,6 +151,7 @@ export interface FileRoutesByTo {
   '/hub/status': typeof HubStatusRoute
   '/reader/$id': typeof ReaderIdRoute
   '/hub': typeof HubIndexRoute
+  '/api/public/tts': typeof ApiPublicTtsRoute
   '/hub/chat/$id': typeof HubChatIdRoute
   '/hub/watch/$code': typeof HubWatchCodeRoute
   '/hub/watch': typeof HubWatchIndexRoute
@@ -164,6 +172,7 @@ export interface FileRoutesById {
   '/hub/watch': typeof HubWatchRouteWithChildren
   '/reader/$id': typeof ReaderIdRoute
   '/hub/': typeof HubIndexRoute
+  '/api/public/tts': typeof ApiPublicTtsRoute
   '/hub/chat/$id': typeof HubChatIdRoute
   '/hub/watch/$code': typeof HubWatchCodeRoute
   '/hub/watch/': typeof HubWatchIndexRoute
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
     | '/hub/watch'
     | '/reader/$id'
     | '/hub/'
+    | '/api/public/tts'
     | '/hub/chat/$id'
     | '/hub/watch/$code'
     | '/hub/watch/'
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/hub/status'
     | '/reader/$id'
     | '/hub'
+    | '/api/public/tts'
     | '/hub/chat/$id'
     | '/hub/watch/$code'
     | '/hub/watch'
@@ -221,6 +232,7 @@ export interface FileRouteTypes {
     | '/hub/watch'
     | '/reader/$id'
     | '/hub/'
+    | '/api/public/tts'
     | '/hub/chat/$id'
     | '/hub/watch/$code'
     | '/hub/watch/'
@@ -236,6 +248,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ArticleIdRoute: typeof ArticleIdRoute
   ReaderIdRoute: typeof ReaderIdRoute
+  ApiPublicTtsRoute: typeof ApiPublicTtsRoute
   ApiPublicBookIdRoute: typeof ApiPublicBookIdRoute
 }
 
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReaderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/tts': {
+      id: '/api/public/tts'
+      path: '/api/public/tts'
+      fullPath: '/api/public/tts'
+      preLoaderRoute: typeof ApiPublicTtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/hub/chat/$id': {
       id: '/hub/chat/$id'
       path: '/chat/$id'
@@ -406,18 +426,9 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ArticleIdRoute: ArticleIdRoute,
   ReaderIdRoute: ReaderIdRoute,
+  ApiPublicTtsRoute: ApiPublicTtsRoute,
   ApiPublicBookIdRoute: ApiPublicBookIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
