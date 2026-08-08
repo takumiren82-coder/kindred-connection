@@ -358,6 +358,70 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
     return () => clearInterval(t);
   }, [phase]);
 
+  // ---- Live voice→voice translation layer -------------------------------
+  // My speech is recognised locally (free, streaming), translated on the
+  // server, and the peer's client speaks it out loud in their language.
+  // Failure here never touches the WebRTC call itself.
+  const sendXlate = useCallback(
+    (translated: string, original: string, timing: { heard: number }) => {
+      chRef.current?.send({
+        type: "broadcast",
+        event: "xlate",
+        payload: { from: myId, text: translated, sentAt: Date.now() },
+      });
+      setXLast(`${original} → ${translated}`);
+      setXLatency(Date.now() - timing.heard);
+      console.debug("[xlate] sent", { original, translated, ms: Date.now() - timing.heard });
+    },
+    [myId],
+  );
+
+  const { listening, lastHeard } = useLiveTranslate({
+    enabled: xlateOn && phase === "in-call",
+    myLang,
+    peerLang,
+    onSegment: sendXlate,
+    onStatus: setXStatus,
+  });
+
+  useEffect(() => {
+    peerLangHandler.current = (l: string) => {
+      if (l in LANGS) setPeerLang(l as LangCode);
+    };
+    xlateHandler.current = ({ text, sentAt }) => {
+      const t0 = Date.now();
+      setXLast(text);
+      setXStatus("playing translation…");
+      // Duck the raw remote audio while the translated voice speaks.
+      const el = remoteAudioRef.current;
+      const prev = el?.volume ?? 1;
+      if (el) el.volume = 0.15;
+      void speakTranslated(text, myLangRef.current, LANGS[myLangRef.current].bcp, {
+        onFirstAudio: () => {
+          setXLatency(Date.now() - sentAt + (t0 - sentAt >= 0 ? 0 : 0));
+          console.debug("[xlate] playback started", Date.now() - sentAt, "ms after send");
+        },
+        onError: (m) => setXStatus(m),
+        onDone: () => {
+          if (el) el.volume = prev;
+          setXStatus(xlateOn ? "listening" : "");
+        },
+      });
+    };
+  }, [xlateOn]);
+
+  useEffect(() => {
+    if (!xlateOn) {
+      stopSpeaking();
+      setXStatus("");
+      return;
+    }
+    void unlockAudio();
+    chRef.current?.send({ type: "broadcast", event: "lang", payload: { from: myId, lang: myLang } });
+    if (!speechSupported()) setXStatus("speech recognition not supported in this browser");
+  }, [xlateOn, myLang, myId]);
+
+
   const endCall = (skipBye = false) => {
     if (!skipBye) chRef.current?.send({ type: "broadcast", event: "bye", payload: { from: myId } });
     setPhase("ended");
