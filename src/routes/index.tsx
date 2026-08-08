@@ -62,12 +62,16 @@ function Home() {
   }, [featured.length]);
 
   const uid = user?.id ?? "guest";
-  const progress = getAllProgress(uid);
+  // localStorage-backed data is read after mount only, otherwise the SSR HTML
+  // and the first client render disagree (hydration mismatch).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const progress = mounted ? getAllProgress(uid) : {};
   const continueList = books
     .filter((b) => progress[b.id])
     .sort((a, b) => (progress[b.id].updatedAt || 0) - (progress[a.id].updatedAt || 0))
     .slice(0, 8);
-  const bookmarks = getBookmarks(uid);
+  const bookmarks = mounted ? getBookmarks(uid) : [];
   const recommended = books.filter((b) => !progress[b.id]).slice(0, 8);
   const feat = featured[featIdx];
 
