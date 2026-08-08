@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PhoneOff,
+  Phone,
   Mic,
   MicOff,
   Video as VideoIcon,
@@ -9,9 +10,14 @@ import {
   Volume2,
   VolumeX,
   NotebookPen,
+  Languages,
   X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { LANGS, type LangCode } from "@/lib/translate.functions";
+import { speakTranslated, stopSpeaking, unlockAudio } from "@/lib/tts-client";
+import { speechSupported, useLiveTranslate } from "@/hooks/useLiveTranslate";
+
 
 // WebRTC audio call over Supabase realtime broadcast for SDP/ICE exchange.
 // Uses public STUN only, so it works on same-network / non-symmetric-NAT setups;
@@ -52,7 +58,12 @@ const RTC_CFG: RTCConfiguration = {
 };
 
 export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer, video = false }: Props) {
-  const [phase, setPhase] = useState<Phase>(mode === "outgoing" ? "ringing" : "ringing");
+  const [phase, setPhase] = useState<Phase>("ringing");
+  // An incoming call must be accepted before we touch the mic / play audio.
+  // That tap is also what unlocks autoplay — without it the callee's remote
+  // <audio> is silently blocked, which is why one side could not be heard.
+  const [accepted, setAccepted] = useState(mode === "outgoing");
+  const [needTap, setNeedTap] = useState(false);
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
   const [facing, setFacing] = useState<"user" | "environment">("user");
@@ -61,6 +72,19 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
   const [loud, setLoud] = useState(true);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [micError, setMicError] = useState<string | null>(null);
+  // ---- Live translation (optional layer on top of the normal call) ----
+  const [xlateOn, setXlateOn] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
+  const [myLang, setMyLang] = useState<LangCode>("hi");
+  const [peerLang, setPeerLang] = useState<LangCode>("zh");
+  const [xStatus, setXStatus] = useState<string>("");
+  const [xLast, setXLast] = useState<string>("");
+  const [xLatency, setXLatency] = useState<number | null>(null);
+  const myLangRef = useRef<LangCode>(myLang);
+  myLangRef.current = myLang;
+  const peerLangHandler = useRef<(l: string) => void>(() => {});
+  const xlateHandler = useRef<(p: { text: string; sentAt: number }) => void>(() => {});
   const [pipPos, setPipPos] = useState<{ x: number; y: number }>({ x: 16, y: 16 });
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -70,19 +94,21 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const chRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Deterministic transceiver handles — matching by receiver.track kind was
+  // unreliable and could leave our mic track unattached (= silent outgoing).
+  const audioTxRef = useRef<RTCRtpTransceiver | null>(null);
+  const videoTxRef = useRef<RTCRtpTransceiver | null>(null);
   // Buffered local ICE candidates. Supabase broadcast is fire-and-forget, so
   // anything we emit before the peer's channel actually subscribes is lost.
-  // We keep a copy and re-flush whenever we hear from the peer.
   const localCandBuf = useRef<RTCIceCandidateInit[]>([]);
-  // Buffered remote ICE candidates that arrived before pc.setRemoteDescription.
   const pendingRemote = useRef<RTCIceCandidateInit[]>([]);
   const peerReady = useRef(false);
-  // Kept so we can re-broadcast the SDP if the peer joined the signalling
-  // channel late (Supabase broadcast is fire-and-forget → lost packets are
-  // the usual cause of "they hear me but I don't hear them").
   const myOffer = useRef<RTCSessionDescriptionInit | null>(null);
   const myAnswer = useRef<RTCSessionDescriptionInit | null>(null);
   const negotiated = useRef(false);
+  // Ignore re-broadcasts of an SDP we have already applied — re-applying the
+  // same offer restarted negotiation every 1.5s and churned the media flow.
+  const appliedRemoteSdp = useRef<string | null>(null);
 
   const flushLocalIce = () => {
     const ch = chRef.current;
@@ -101,7 +127,23 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
     }
   };
 
+  // Make sure remote audio actually plays. Autoplay can still be refused on
+  // some devices — in that case we surface a tap-to-listen prompt instead of
+  // failing silently.
+  const ensurePlay = () => {
+    const els: (HTMLMediaElement | null)[] = [remoteAudioRef.current, remoteVideoRef.current];
+    let blocked = false;
+    for (const el of els) {
+      if (!el) continue;
+      el.muted = false;
+      el.volume = 1;
+      void el.play().catch(() => { blocked = true; });
+    }
+    setTimeout(() => setNeedTap(blocked), 300);
+  };
+
   useEffect(() => {
+    if (!accepted) return;
     const channel = supabase.channel(`call:${room}`, { config: { broadcast: { self: false } } });
     chRef.current = channel;
 
@@ -110,18 +152,24 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
     // Always declare both directions up front so the SDP carries a sendrecv
     // m-line for audio (and video) even if a track is added a moment later.
     try {
-      pc.addTransceiver("audio", { direction: "sendrecv" });
-      if (video) pc.addTransceiver("video", { direction: "sendrecv" });
+      audioTxRef.current = pc.addTransceiver("audio", { direction: "sendrecv" });
+      if (video) videoTxRef.current = pc.addTransceiver("video", { direction: "sendrecv" });
     } catch { /* older browsers */ }
     pc.ontrack = (e) => {
-      const stream = e.streams[0];
+      const stream = e.streams[0] ?? new MediaStream([e.track]);
       remoteStreamRef.current = stream;
       if (remoteAudioRef.current) remoteAudioRef.current.srcObject = stream;
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
       setPhase("in-call");
+      ensurePlay();
     };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "connected") negotiated.current = true;
+      console.debug("[call] connection", pc.connectionState);
+      if (pc.connectionState === "connected") {
+        negotiated.current = true;
+        setPhase("in-call");
+        ensurePlay();
+      }
       if (pc.connectionState === "failed") {
         // Renegotiate with an ICE restart instead of dying one-way.
         void (async () => {
@@ -147,17 +195,19 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         if (payload.from === myId) return;
         if (pc.signalingState === "have-local-offer") {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
+          appliedRemoteSdp.current = payload.answer.sdp;
           setPhase("connecting");
           await applyPendingRemote();
-          // Peer is definitely subscribed if we got their answer → re-flush.
           if (!peerReady.current) { peerReady.current = true; flushLocalIce(); }
         }
       })
       .on("broadcast", { event: "offer" }, async ({ payload }) => {
         // A re-offer (ICE restart / late join) for the callee side.
         if (payload.from === myId || mode === "outgoing") return;
+        if (appliedRemoteSdp.current === payload.offer?.sdp) return;
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+          appliedRemoteSdp.current = payload.offer.sdp;
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           myAnswer.current = answer;
@@ -168,15 +218,23 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
       .on("broadcast", { event: "hello" }, ({ payload }) => {
         if (payload.from === myId) return;
         peerReady.current = true;
-        // Peer just subscribed. Re-send any ICE candidates we already emitted.
         flushLocalIce();
-        // …and the SDP, in case the first broadcast was sent before they
-        // were listening. Without this the peer never gets our media.
+        if (payload.lang) peerLangHandler.current(payload.lang);
+        channel.send({ type: "broadcast", event: "lang", payload: { from: myId, lang: myLangRef.current } });
         if (myOffer.current) {
           channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer: myOffer.current, peerName, video } });
         } else if (myAnswer.current) {
           channel.send({ type: "broadcast", event: "answer", payload: { from: myId, answer: myAnswer.current } });
         }
+      })
+      .on("broadcast", { event: "lang" }, ({ payload }) => {
+        if (payload.from === myId) return;
+        if (payload.lang) peerLangHandler.current(payload.lang);
+      })
+      // Translated speech arriving from the peer — already in MY language.
+      .on("broadcast", { event: "xlate" }, ({ payload }) => {
+        if (payload.from === myId) return;
+        xlateHandler.current(payload as { text: string; sentAt: number });
       })
       .on("broadcast", { event: "ice" }, async ({ payload }) => {
         if (payload.from === myId) return;
@@ -196,7 +254,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
       .subscribe(async (status) => {
         if (status !== "SUBSCRIBED") return;
         // Announce readiness so the peer can (re)flush its buffered ICE.
-        channel.send({ type: "broadcast", event: "hello", payload: { from: myId } });
+        channel.send({ type: "broadcast", event: "hello", payload: { from: myId, lang: myLangRef.current } });
         try {
           let stream: MediaStream;
           try {
@@ -209,15 +267,27 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
             stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
           }
           localStreamRef.current = stream;
-          // Attach to the pre-created transceivers so our media is always
-          // actually sent (addTrack alone can land on a recvonly m-line).
-          for (const t of stream.getTracks()) {
-            const sender = pc.getTransceivers().find(
-              (tr) => tr.receiver.track?.kind === t.kind && !tr.sender.track,
-            )?.sender;
-            if (sender) await sender.replaceTrack(t);
-            else pc.addTrack(t, stream);
+          const mic = stream.getAudioTracks()[0];
+          if (!mic) throw new Error("no microphone track");
+          mic.enabled = true;
+          // Attach to the transceivers we created, so our media is always
+          // really sent (addTrack alone can land on a recvonly m-line).
+          if (audioTxRef.current) {
+            await audioTxRef.current.sender.replaceTrack(mic);
+            audioTxRef.current.direction = "sendrecv";
+          } else {
+            pc.addTrack(mic, stream);
           }
+          const cam = stream.getVideoTracks()[0];
+          if (cam) {
+            if (videoTxRef.current) {
+              await videoTxRef.current.sender.replaceTrack(cam);
+              videoTxRef.current.direction = "sendrecv";
+            } else {
+              pc.addTrack(cam, stream);
+            }
+          }
+          console.debug("[call] local tracks", stream.getTracks().map((t) => `${t.kind}:${t.readyState}:${t.enabled}`));
           if (video && localVideoRef.current) localVideoRef.current.srcObject = stream;
 
           if (mode === "outgoing") {
@@ -227,6 +297,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
             channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer, peerName, video } });
           } else if (incomingOffer) {
             await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
+            appliedRemoteSdp.current = incomingOffer.sdp ?? null;
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             myAnswer.current = answer;
@@ -236,7 +307,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
           }
         } catch (e) {
           console.error("call setup failed", e);
-          endCall(true);
+          setMicError("Microphone unavailable — check permissions");
         }
       });
 
@@ -244,7 +315,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
     // network or a late-joining peer can still complete the handshake.
     const retry = setInterval(() => {
       if (negotiated.current || pc.connectionState === "connected") return;
-      channel.send({ type: "broadcast", event: "hello", payload: { from: myId } });
+      channel.send({ type: "broadcast", event: "hello", payload: { from: myId, lang: myLangRef.current } });
       if (myOffer.current) {
         channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer: myOffer.current, peerName, video } });
       } else if (myAnswer.current) {
@@ -255,18 +326,113 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
 
     return () => {
       clearInterval(retry);
+      // Full teardown so the next call starts from a clean mic state.
+      try { audioTxRef.current?.sender.replaceTrack(null); } catch { /* ignore */ }
+      audioTxRef.current = null;
+      videoTxRef.current = null;
+      pc.getSenders().forEach((s) => { try { s.track?.stop(); } catch { /* ignore */ } });
+      pc.ontrack = null;
+      pc.onicecandidate = null;
+      pc.onconnectionstatechange = null;
       pc.close();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+      remoteStreamRef.current = null;
+      pcRef.current = null;
+      appliedRemoteSdp.current = null;
+      localCandBuf.current = [];
+      pendingRemote.current = [];
+      peerReady.current = false;
+      negotiated.current = false;
+      myOffer.current = null;
+      myAnswer.current = null;
       supabase.removeChannel(channel);
+      chRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [accepted]);
 
   useEffect(() => {
     if (phase !== "in-call") return;
     const t = setInterval(() => setSecs((s) => s + 1), 1000);
     return () => clearInterval(t);
   }, [phase]);
+
+  // ---- Live voice→voice translation layer -------------------------------
+  // My speech is recognised locally (free, streaming), translated on the
+  // server, and the peer's client speaks it out loud in their language.
+  // Failure here never touches the WebRTC call itself.
+  const sendXlate = useCallback(
+    (translated: string, original: string, timing: { heard: number }) => {
+      chRef.current?.send({
+        type: "broadcast",
+        event: "xlate",
+        payload: { from: myId, text: translated, sentAt: Date.now() },
+      });
+      setXLast(`${original} → ${translated}`);
+      setXLatency(Date.now() - timing.heard);
+      console.debug("[xlate] sent", { original, translated, ms: Date.now() - timing.heard });
+    },
+    [myId],
+  );
+
+  const { listening, lastHeard } = useLiveTranslate({
+    enabled: xlateOn && phase === "in-call",
+    myLang,
+    peerLang,
+    onSegment: sendXlate,
+    onStatus: setXStatus,
+  });
+
+  useEffect(() => {
+    peerLangHandler.current = (l: string) => {
+      if (l in LANGS) setPeerLang(l as LangCode);
+    };
+    xlateHandler.current = ({ text, sentAt }) => {
+      const t0 = Date.now();
+      setXLast(text);
+      setXStatus("playing translation…");
+      // Duck the raw remote audio while the translated voice speaks.
+      const el = remoteAudioRef.current;
+      const prev = el?.volume ?? 1;
+      if (el) el.volume = 0.15;
+      void speakTranslated(text, myLangRef.current, LANGS[myLangRef.current].bcp, {
+        onFirstAudio: () => {
+          setXLatency(Date.now() - sentAt + (t0 - sentAt >= 0 ? 0 : 0));
+          console.debug("[xlate] playback started", Date.now() - sentAt, "ms after send");
+        },
+        onError: (m) => setXStatus(m),
+        onDone: () => {
+          if (el) el.volume = prev;
+          setXStatus(xlateOn ? "listening" : "");
+        },
+      });
+    };
+  }, [xlateOn]);
+
+  useEffect(() => {
+    if (!xlateOn) {
+      stopSpeaking();
+      setXStatus("");
+      return;
+    }
+    void unlockAudio();
+    chRef.current?.send({ type: "broadcast", event: "lang", payload: { from: myId, lang: myLang } });
+    if (!speechSupported()) setXStatus("speech recognition not supported in this browser");
+  }, [xlateOn, myLang, myId]);
+
+
+  // Declining before accepting: we have no channel yet, so open a throwaway
+  // one just to tell the caller to stop ringing.
+  const declineCall = () => {
+    const ch = supabase.channel(`call:${room}`);
+    ch.subscribe((s) => {
+      if (s !== "SUBSCRIBED") return;
+      ch.send({ type: "broadcast", event: "bye", payload: { from: myId } });
+      setTimeout(() => supabase.removeChannel(ch), 400);
+    });
+    onClose();
+  };
 
   const endCall = (skipBye = false) => {
     if (!skipBye) chRef.current?.send({ type: "broadcast", event: "bye", payload: { from: myId } });
@@ -444,6 +610,13 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         <NotebookPen className="h-[22px] w-[22px]" />
       </button>
       <button
+        onClick={() => { void unlockAudio(); setLangOpen(true); }}
+        aria-label="Translation"
+        className={`ember-ctrl ${xlateOn ? "border-primary/70 bg-primary/15 text-primary" : ""}`}
+      >
+        <Languages className="h-[22px] w-[22px]" />
+      </button>
+      <button
         onClick={() => endCall()}
         aria-label="End call"
         className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-primary text-white shadow-[0_10px_26px_-8px_rgba(255,46,63,0.9)] active:scale-95"
@@ -452,6 +625,123 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
       </button>
     </>
   );
+
+  const langSheet = langOpen ? (
+    <div className="absolute inset-0 z-30 flex items-end bg-black/70 backdrop-blur-sm" onClick={() => setLangOpen(false)}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full rounded-t-3xl border-t border-border bg-[#0c0c0f] px-5 pb-8 pt-5"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-heading text-sm font-semibold text-foreground">Live Translation</h3>
+          <button onClick={() => setLangOpen(false)} aria-label="Close" className="text-muted-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <label className="mb-4 flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3">
+          <span className="text-[13px] text-foreground">Translate my voice</span>
+          <input
+            type="checkbox"
+            checked={xlateOn}
+            onChange={(e) => { void unlockAudio(); setXlateOn(e.target.checked); }}
+            className="h-5 w-9 accent-[var(--color-primary,#ff2e3f)]"
+          />
+        </label>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="mb-1 text-[11px] text-muted-foreground">My language</p>
+            <select
+              value={myLang}
+              onChange={(e) => setMyLang(e.target.value as LangCode)}
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-[13px] text-foreground outline-none"
+            >
+              {Object.entries(LANGS).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] text-muted-foreground">Other person</p>
+            <select
+              value={peerLang}
+              onChange={(e) => setPeerLang(e.target.value as LangCode)}
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-[13px] text-foreground outline-none"
+            >
+              {Object.entries(LANGS).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          {xStatus || (xlateOn ? "starting…" : "Off — normal call audio only.")}
+          {xLatency != null && xlateOn ? ` · ${xLatency} ms` : ""}
+        </p>
+        {(lastHeard || xLast) && (
+          <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground/80">
+            {listening && lastHeard ? `🎙 ${lastHeard}` : ""} {xLast ? `· ${xLast}` : ""}
+          </p>
+        )}
+        <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground/70">
+          Your microphone audio is processed live to produce translated speech. Nothing is recorded or stored.
+        </p>
+      </div>
+    </div>
+  ) : null;
+
+  const statusStrip = (
+    <>
+      {micError && (
+        <div className="pointer-events-none absolute inset-x-0 top-20 z-20 mx-auto w-fit rounded-full bg-primary/20 px-4 py-1.5 text-[11px] text-primary">
+          {micError}
+        </div>
+      )}
+      {needTap && (
+        <button
+          onClick={() => { void unlockAudio(); ensurePlay(); }}
+          className="absolute inset-x-0 top-28 z-30 mx-auto w-fit rounded-full bg-primary px-5 py-2 text-[12px] font-semibold text-white"
+        >
+          Tap to hear caller
+        </button>
+      )}
+      {xlateOn && (
+        <div className="pointer-events-none absolute inset-x-0 top-32 z-20 mx-auto w-fit rounded-full bg-primary/15 px-3 py-1 text-[10px] text-primary">
+          Translation on · {LANGS[myLang].label} ⇄ {LANGS[peerLang].label}
+          {xStatus ? ` · ${xStatus}` : ""}
+        </div>
+      )}
+    </>
+  );
+
+  // Incoming call must be accepted first — that tap grants mic + audio playback.
+  const acceptGate = !accepted ? (
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-end bg-[#08080a]/95 pb-16">
+      <span className="mb-3 font-heading text-[20px] font-semibold text-foreground">{peerName}</span>
+      <span className="mb-10 text-[13px] text-muted-foreground">
+        Incoming {video ? "video" : "voice"} call…
+      </span>
+      <div className="flex items-center gap-10">
+        <button
+          onClick={declineCall}
+          aria-label="Decline"
+          className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-primary text-white active:scale-95"
+        >
+          <PhoneOff className="h-6 w-6" />
+        </button>
+        <button
+          onClick={() => { void unlockAudio(); setAccepted(true); }}
+          aria-label="Accept"
+          className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-emerald-500 text-white active:scale-95"
+        >
+          <Phone className="h-6 w-6" />
+        </button>
+      </div>
+    </div>
+  ) : null;
+
 
   const noteSheet = noteOpen ? (
     <div className="absolute inset-0 z-30 flex items-end bg-black/70 backdrop-blur-sm" onClick={() => setNoteOpen(false)}>
@@ -519,6 +809,9 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         {/* Controls */}
         <div className="mt-auto flex flex-wrap items-center justify-center gap-5 pb-2">{controls}</div>
         {noteSheet}
+      {langSheet}
+      {statusStrip}
+      {acceptGate}
       </div>
     );
   }
@@ -607,6 +900,9 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         {controls}
       </div>
       {noteSheet}
+      {langSheet}
+      {statusStrip}
+      {acceptGate}
     </div>
   );
 }
