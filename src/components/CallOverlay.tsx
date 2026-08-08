@@ -52,7 +52,12 @@ const RTC_CFG: RTCConfiguration = {
 };
 
 export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer, video = false }: Props) {
-  const [phase, setPhase] = useState<Phase>(mode === "outgoing" ? "ringing" : "ringing");
+  const [phase, setPhase] = useState<Phase>("ringing");
+  // An incoming call must be accepted before we touch the mic / play audio.
+  // That tap is also what unlocks autoplay — without it the callee's remote
+  // <audio> is silently blocked, which is why one side could not be heard.
+  const [accepted, setAccepted] = useState(mode === "outgoing");
+  const [needTap, setNeedTap] = useState(false);
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
   const [facing, setFacing] = useState<"user" | "environment">("user");
@@ -61,6 +66,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
   const [loud, setLoud] = useState(true);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [micError, setMicError] = useState<string | null>(null);
   const [pipPos, setPipPos] = useState<{ x: number; y: number }>({ x: 16, y: 16 });
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -70,19 +76,21 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const chRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Deterministic transceiver handles — matching by receiver.track kind was
+  // unreliable and could leave our mic track unattached (= silent outgoing).
+  const audioTxRef = useRef<RTCRtpTransceiver | null>(null);
+  const videoTxRef = useRef<RTCRtpTransceiver | null>(null);
   // Buffered local ICE candidates. Supabase broadcast is fire-and-forget, so
   // anything we emit before the peer's channel actually subscribes is lost.
-  // We keep a copy and re-flush whenever we hear from the peer.
   const localCandBuf = useRef<RTCIceCandidateInit[]>([]);
-  // Buffered remote ICE candidates that arrived before pc.setRemoteDescription.
   const pendingRemote = useRef<RTCIceCandidateInit[]>([]);
   const peerReady = useRef(false);
-  // Kept so we can re-broadcast the SDP if the peer joined the signalling
-  // channel late (Supabase broadcast is fire-and-forget → lost packets are
-  // the usual cause of "they hear me but I don't hear them").
   const myOffer = useRef<RTCSessionDescriptionInit | null>(null);
   const myAnswer = useRef<RTCSessionDescriptionInit | null>(null);
   const negotiated = useRef(false);
+  // Ignore re-broadcasts of an SDP we have already applied — re-applying the
+  // same offer restarted negotiation every 1.5s and churned the media flow.
+  const appliedRemoteSdp = useRef<string | null>(null);
 
   const flushLocalIce = () => {
     const ch = chRef.current;
@@ -101,7 +109,23 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
     }
   };
 
+  // Make sure remote audio actually plays. Autoplay can still be refused on
+  // some devices — in that case we surface a tap-to-listen prompt instead of
+  // failing silently.
+  const ensurePlay = () => {
+    const els: (HTMLMediaElement | null)[] = [remoteAudioRef.current, remoteVideoRef.current];
+    let blocked = false;
+    for (const el of els) {
+      if (!el) continue;
+      el.muted = false;
+      el.volume = 1;
+      void el.play().catch(() => { blocked = true; });
+    }
+    setTimeout(() => setNeedTap(blocked), 300);
+  };
+
   useEffect(() => {
+    if (!accepted) return;
     const channel = supabase.channel(`call:${room}`, { config: { broadcast: { self: false } } });
     chRef.current = channel;
 
@@ -110,18 +134,24 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
     // Always declare both directions up front so the SDP carries a sendrecv
     // m-line for audio (and video) even if a track is added a moment later.
     try {
-      pc.addTransceiver("audio", { direction: "sendrecv" });
-      if (video) pc.addTransceiver("video", { direction: "sendrecv" });
+      audioTxRef.current = pc.addTransceiver("audio", { direction: "sendrecv" });
+      if (video) videoTxRef.current = pc.addTransceiver("video", { direction: "sendrecv" });
     } catch { /* older browsers */ }
     pc.ontrack = (e) => {
-      const stream = e.streams[0];
+      const stream = e.streams[0] ?? new MediaStream([e.track]);
       remoteStreamRef.current = stream;
       if (remoteAudioRef.current) remoteAudioRef.current.srcObject = stream;
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
       setPhase("in-call");
+      ensurePlay();
     };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "connected") negotiated.current = true;
+      console.debug("[call] connection", pc.connectionState);
+      if (pc.connectionState === "connected") {
+        negotiated.current = true;
+        setPhase("in-call");
+        ensurePlay();
+      }
       if (pc.connectionState === "failed") {
         // Renegotiate with an ICE restart instead of dying one-way.
         void (async () => {
@@ -147,17 +177,19 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
         if (payload.from === myId) return;
         if (pc.signalingState === "have-local-offer") {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
+          appliedRemoteSdp.current = payload.answer.sdp;
           setPhase("connecting");
           await applyPendingRemote();
-          // Peer is definitely subscribed if we got their answer → re-flush.
           if (!peerReady.current) { peerReady.current = true; flushLocalIce(); }
         }
       })
       .on("broadcast", { event: "offer" }, async ({ payload }) => {
         // A re-offer (ICE restart / late join) for the callee side.
         if (payload.from === myId || mode === "outgoing") return;
+        if (appliedRemoteSdp.current === payload.offer?.sdp) return;
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
+          appliedRemoteSdp.current = payload.offer.sdp;
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           myAnswer.current = answer;
@@ -168,10 +200,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
       .on("broadcast", { event: "hello" }, ({ payload }) => {
         if (payload.from === myId) return;
         peerReady.current = true;
-        // Peer just subscribed. Re-send any ICE candidates we already emitted.
         flushLocalIce();
-        // …and the SDP, in case the first broadcast was sent before they
-        // were listening. Without this the peer never gets our media.
         if (myOffer.current) {
           channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer: myOffer.current, peerName, video } });
         } else if (myAnswer.current) {
@@ -209,15 +238,27 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
             stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
           }
           localStreamRef.current = stream;
-          // Attach to the pre-created transceivers so our media is always
-          // actually sent (addTrack alone can land on a recvonly m-line).
-          for (const t of stream.getTracks()) {
-            const sender = pc.getTransceivers().find(
-              (tr) => tr.receiver.track?.kind === t.kind && !tr.sender.track,
-            )?.sender;
-            if (sender) await sender.replaceTrack(t);
-            else pc.addTrack(t, stream);
+          const mic = stream.getAudioTracks()[0];
+          if (!mic) throw new Error("no microphone track");
+          mic.enabled = true;
+          // Attach to the transceivers we created, so our media is always
+          // really sent (addTrack alone can land on a recvonly m-line).
+          if (audioTxRef.current) {
+            await audioTxRef.current.sender.replaceTrack(mic);
+            audioTxRef.current.direction = "sendrecv";
+          } else {
+            pc.addTrack(mic, stream);
           }
+          const cam = stream.getVideoTracks()[0];
+          if (cam) {
+            if (videoTxRef.current) {
+              await videoTxRef.current.sender.replaceTrack(cam);
+              videoTxRef.current.direction = "sendrecv";
+            } else {
+              pc.addTrack(cam, stream);
+            }
+          }
+          console.debug("[call] local tracks", stream.getTracks().map((t) => `${t.kind}:${t.readyState}:${t.enabled}`));
           if (video && localVideoRef.current) localVideoRef.current.srcObject = stream;
 
           if (mode === "outgoing") {
@@ -227,6 +268,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
             channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer, peerName, video } });
           } else if (incomingOffer) {
             await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
+            appliedRemoteSdp.current = incomingOffer.sdp ?? null;
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             myAnswer.current = answer;
@@ -236,7 +278,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
           }
         } catch (e) {
           console.error("call setup failed", e);
-          endCall(true);
+          setMicError("Microphone unavailable — check permissions");
         }
       });
 
@@ -255,12 +297,31 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
 
     return () => {
       clearInterval(retry);
+      // Full teardown so the next call starts from a clean mic state.
+      try { audioTxRef.current?.sender.replaceTrack(null); } catch { /* ignore */ }
+      audioTxRef.current = null;
+      videoTxRef.current = null;
+      pc.getSenders().forEach((s) => { try { s.track?.stop(); } catch { /* ignore */ } });
+      pc.ontrack = null;
+      pc.onicecandidate = null;
+      pc.onconnectionstatechange = null;
       pc.close();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+      remoteStreamRef.current = null;
+      pcRef.current = null;
+      appliedRemoteSdp.current = null;
+      localCandBuf.current = [];
+      pendingRemote.current = [];
+      peerReady.current = false;
+      negotiated.current = false;
+      myOffer.current = null;
+      myAnswer.current = null;
       supabase.removeChannel(channel);
+      chRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [accepted]);
 
   useEffect(() => {
     if (phase !== "in-call") return;
