@@ -422,6 +422,18 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
   }, [xlateOn, myLang, myId]);
 
 
+  // Declining before accepting: we have no channel yet, so open a throwaway
+  // one just to tell the caller to stop ringing.
+  const declineCall = () => {
+    const ch = supabase.channel(`call:${room}`);
+    ch.subscribe((s) => {
+      if (s !== "SUBSCRIBED") return;
+      ch.send({ type: "broadcast", event: "bye", payload: { from: myId } });
+      setTimeout(() => supabase.removeChannel(ch), 400);
+    });
+    onClose();
+  };
+
   const endCall = (skipBye = false) => {
     if (!skipBye) chRef.current?.send({ type: "broadcast", event: "bye", payload: { from: myId } });
     setPhase("ended");
@@ -713,7 +725,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
       </span>
       <div className="flex items-center gap-10">
         <button
-          onClick={() => { onClose(); }}
+          onClick={declineCall}
           aria-label="Decline"
           className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-primary text-white active:scale-95"
         >
