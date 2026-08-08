@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PhoneOff,
+  Phone,
   Mic,
   MicOff,
   Video as VideoIcon,
@@ -9,9 +10,14 @@ import {
   Volume2,
   VolumeX,
   NotebookPen,
+  Languages,
   X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { LANGS, type LangCode } from "@/lib/translate.functions";
+import { speakTranslated, stopSpeaking, unlockAudio } from "@/lib/tts-client";
+import { speechSupported, useLiveTranslate } from "@/hooks/useLiveTranslate";
+
 
 // WebRTC audio call over Supabase realtime broadcast for SDP/ICE exchange.
 // Uses public STUN only, so it works on same-network / non-symmetric-NAT setups;
