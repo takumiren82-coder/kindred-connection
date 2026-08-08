@@ -67,6 +67,18 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState("");
   const [micError, setMicError] = useState<string | null>(null);
+  // ---- Live translation (optional layer on top of the normal call) ----
+  const [xlateOn, setXlateOn] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
+  const [myLang, setMyLang] = useState<LangCode>("hi");
+  const [peerLang, setPeerLang] = useState<LangCode>("zh");
+  const [xStatus, setXStatus] = useState<string>("");
+  const [xLast, setXLast] = useState<string>("");
+  const [xLatency, setXLatency] = useState<number | null>(null);
+  const myLangRef = useRef<LangCode>(myLang);
+  myLangRef.current = myLang;
+  const peerLangHandler = useRef<(l: string) => void>(() => {});
+  const xlateHandler = useRef<(p: { text: string; sentAt: number }) => void>(() => {});
   const [pipPos, setPipPos] = useState<{ x: number; y: number }>({ x: 16, y: 16 });
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
