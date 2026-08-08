@@ -254,7 +254,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
       .subscribe(async (status) => {
         if (status !== "SUBSCRIBED") return;
         // Announce readiness so the peer can (re)flush its buffered ICE.
-        channel.send({ type: "broadcast", event: "hello", payload: { from: myId } });
+        channel.send({ type: "broadcast", event: "hello", payload: { from: myId, lang: myLangRef.current } });
         try {
           let stream: MediaStream;
           try {
@@ -315,7 +315,7 @@ export function CallOverlay({ room, myId, peerName, mode, onClose, incomingOffer
     // network or a late-joining peer can still complete the handshake.
     const retry = setInterval(() => {
       if (negotiated.current || pc.connectionState === "connected") return;
-      channel.send({ type: "broadcast", event: "hello", payload: { from: myId } });
+      channel.send({ type: "broadcast", event: "hello", payload: { from: myId, lang: myLangRef.current } });
       if (myOffer.current) {
         channel.send({ type: "broadcast", event: "offer", payload: { from: myId, offer: myOffer.current, peerName, video } });
       } else if (myAnswer.current) {
